@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>恵理の文字入力システム</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto Sans JP',sans-serif;overflow:hidden;user-select:none;}
+
+/* ===================================================
+   CALIBRATION
+=================================================== */
+#calibration-screen{
+  position:fixed;inset:0;background:#0a0a0a;z-index:200;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0;
+}
+
+/* 開始前の状態 */
+#cal-idle{
+  display:flex;flex-direction:column;align-items:center;gap:32px;
+}
+#cal-idle-icon{font-size:72px;line-height:1;}
+#cal-idle-title{font-size:22px;font-weight:300;color:#f0f0f0;letter-spacing:0.1em;}
+#cal-idle-sub{font-size:13px;color:#555;text-align:center;line-height:2;}
+#cal-start-btn{
+  margin-top:8px;
+  padding:18px 56px;
+  font-size:18px;font-weight:400;
+  font-family:'Noto Sans JP',sans-serif;
+  background:#1a4a2a;color:#7adf7a;
+  border:2px solid #2a7a3a;border-radius:14px;
+  cursor:pointer;letter-spacing:0.12em;
+  transition:background 0.2s,transform 0.1s;
+}
+#cal-start-btn:hover{background:#235a35;}
+#cal-start-btn:active{transform:scale(0.97);}
+#cal-start-btn:disabled{opacity:0.35;cursor:not-allowed;transform:none;}
+
+/* 計測中の状態 */
+#cal-running{display:none;width:100%;height:100%;position:relative;}
+
+/* 動く白丸 */
+#cal-dot{
+  position:absolute;
+  width:36px;height:36px;border-radius:50%;
+  background:#fff;
+  box-shadow:0 0 0 8px rgba(255,255,255,0.12),0 0 50px rgba(255,255,255,0.5);
+  transform:translate(-50%,-50%);
+  transition:left 2s ease-in-out, top 0.3s ease;
+  pointer-events:none;
+}
+@keyframes dot-pulse{
+  0%,100%{box-shadow:0 0 0 8px rgba(255,255,255,0.12),0 0 50px rgba(255,255,255,0.5);}
+  50%{box-shadow:0 0 0 16px rgba(255,255,255,0.06),0 0 70px rgba(255,255,255,0.7);}
+}
+#cal-dot.pulse{animation:dot-pulse 1s ease-in-out infinite;}
+
+/* 計測中の指示テキスト（常に中央） */
+#cal-instruction{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  text-align:center;
+  display:flex;flex-direction:column;align-items:center;gap:14px;
+  pointer-events:none;
+  transition:opacity 0.4s;
+}
+#cal-phase-text{font-size:26px;font-weight:300;color:#fff;letter-spacing:0.05em;}
+#cal-phase-sub{font-size:13px;color:#666;letter-spacing:0.08em;}
+
+/* EARゲージ */
+#ear-gauge-wrap{
+  position:absolute;bottom:60px;left:50%;transform:translateX(-50%);
+  width:280px;
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+}
+#ear-gauge-label{font-size:11px;color:#555;letter-spacing:0.1em;}
+#ear-gauge-bar-bg{width:100%;height:8px;background:#1e1e1e;border-radius:4px;overflow:hidden;}
+#ear-gauge-bar{height:100%;width:0%;background:#5a9adf;border-radius:4px;transition:width 0.08s linear;}
+#ear-value{font-size:11px;color:#444;font-family:monospace;}
+
+/* 完了メッセージ */
+#cal-done{
+  display:none;
+  flex-direction:column;align-items:center;gap:20px;
+  text-align:center;
+}
+#cal-done-icon{font-size:56px;}
+#cal-done-title{font-size:22px;font-weight:300;color:#7adf7a;letter-spacing:0.1em;}
+#cal-done-sub{font-size:14px;color:#555;letter-spacing:0.06em;}
+#cal-done-timer{font-size:28px;color:#888;}
+
+/* ===================================================
+   MAIN SCREEN — 上下3分割
+=================================================== */
+#main-screen{display:none;width:100%;height:100%;flex-direction:column;}
+#main-screen.active{display:flex;}
+
+/* ① 入力バー */
+#input-bar{
+  height:56px;flex-shrink:0;
+  background:#0a0a0a;border-bottom:1px solid #1c1c1c;
+  display:flex;align-items:center;padding:0 12px;gap:10px;
+}
+#input-label{font-size:11px;color:#444;white-space:nowrap;}
+#input-scroll{flex:1;overflow:hidden;}
+#input-text{font-size:26px;font-weight:300;letter-spacing:3px;color:#f0f0f0;white-space:nowrap;}
+#input-cursor{
+  display:inline-block;width:2px;height:26px;
+  background:#f0f0f0;margin-left:2px;vertical-align:middle;
+  animation:cur 1s step-end infinite;
+}
+@keyframes cur{50%{opacity:0;}}
+#fulltext-btn{
+  font-size:11px;color:#555;background:none;
+  border:1px solid #2a2a2a;border-radius:4px;
+  padding:3px 10px;cursor:pointer;font-family:inherit;white-space:nowrap;
+}
+#fulltext-btn:hover{color:#aaa;border-color:#555;}
+
+/* ② メインエリア */
+#main-area{flex:1;position:relative;display:flex;overflow:hidden;}
+
+/* ロックオーバーレイ */
+#lock-overlay{
+  position:absolute;inset:0;background:rgba(0,0,0,0.65);
+  z-index:30;pointer-events:none;opacity:0;transition:opacity 0.5s;
+  display:flex;align-items:center;justify-content:center;
+}
+#lock-overlay.active{opacity:1;}
+#lock-label{font-size:20px;font-weight:300;letter-spacing:0.25em;color:#666;}
+
+/* L/R 判定ゾーン（各6%） — バーなし、背景色変化 */
+.gaze-zone{
+  position:absolute;top:0;bottom:0;width:6%;z-index:10;
+  display:flex;align-items:center;justify-content:center;
+  transition:background 0.1s;
+  cursor:default;
+}
+#gaze-left {left:0;  background:rgba(50,140,70,0.06); border-right:1px solid rgba(50,140,70,0.15);}
+#gaze-right{right:0; background:rgba(50,80,180,0.06);  border-left: 1px solid rgba(50,80,180,0.15);}
+.gaze-zone-label{font-size:12px;color:rgba(255,255,255,0.12);letter-spacing:0.1em;}
+
+/* ドウェル中：じわじわ明るく */
+#gaze-left.dwelling-1{background:rgba(50,180,80,0.12);}
+#gaze-left.dwelling-2{background:rgba(50,200,80,0.22);}
+#gaze-left.dwelling-3{background:rgba(60,220,90,0.35);}
+#gaze-left.dwelling-4{background:rgba(80,240,100,0.5);}
+#gaze-right.dwelling-1{background:rgba(60,100,220,0.12);}
+#gaze-right.dwelling-2{background:rgba(60,110,230,0.22);}
+#gaze-right.dwelling-3{background:rgba(70,120,240,0.35);}
+#gaze-right.dwelling-4{background:rgba(80,140,255,0.5);}
+.gaze-zone.confirmed{animation:zflash 0.45s ease;}
+@keyframes zflash{0%{background:rgba(255,255,255,0.7);}100%{background:rgba(255,255,255,0.04);}}
+
+/* 文字エリア（背景色のみ） */
+#char-area{
+  position:absolute;left:6%;right:6%;top:0;bottom:0;
+  display:flex;
+}
+#char-left,#char-right{
+  flex:1;position:relative;
+  transition:background 0.5s ease;
+}
+#char-left{ background:rgba(40,110,60,0.18); border-right:1px solid rgba(255,255,255,0.06); }
+#char-right{ background:rgba(35,55,130,0.18); }
+
+/* ゲージ＋文字を縦にまとめて画面中央 */
+#center-group{
+  position:absolute;left:6%;right:6%;top:0;bottom:0;
+  z-index:20;pointer-events:none;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:0;
+}
+
+/* 文字の左右行 */
+#chars-row{
+  display:flex;width:100%;
+  align-items:center;
+}
+#chars-row #chars-left-text{
+  flex:1;text-align:right;padding-right:30px;
+}
+#chars-row #chars-right-text{
+  flex:1;text-align:left;padding-left:30px;
+}
+
+/* 文字スタイル */
+.half-chars{
+  font-size:32px;font-weight:400;
+  line-height:1.4;white-space:nowrap;
+  transition:color 0.3s;
+}
+.half-chars.row-mode{ color:#f0f0f0; }
+.half-chars.col-mode{ color:#ffdd44; }
+
+/* ゲージエリア（文字の30px上に配置・下寄せ） */
+#gauge-area{
+  position:absolute;left:6%;right:6%;top:0;bottom:0;
+  z-index:20;pointer-events:none;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:10px;
+}
+/* ① 瞬きカウント数字 */
+#blink-count{
+  font-size:52px;font-weight:300;
+  line-height:1;
+  color:#333;
+  transition:color 0.12s, text-shadow 0.12s;
+  min-width:1ch;text-align:center;
+}
+/* 0：ほぼ見えないグレーで常時表示 */
+#blink-count.c-gray0{ color:#333; text-shadow:none; }
+/* 回数別の色 */
+#blink-count.c-0{ color:#666; text-shadow:none; }
+#blink-count.c-1{ color:#666; text-shadow:none; }
+#blink-count.c-2{ color:#ddcc00; text-shadow:0 0 12px #ddcc0088; }
+#blink-count.c-3{ color:#666; text-shadow:none; }
+#blink-count.c-4{ color:#666; text-shadow:none; }
+#blink-count.c-5{ color:#ff1111; text-shadow:0 0 16px #ff111199; }
+#blink-count.c-6{ color:#ff0000; text-shadow:0 0 20px #ff0000bb; }
+#blink-count.c-7{ color:#777; text-shadow:none; }
+#blink-count.c-8{ color:#aaa; text-shadow:none; }
+#blink-count.c-9{ color:#ddd; text-shadow:0 0 8px #dddddd88; }
+
+/* ② 目閉じゲージ */
+#lock-bar-wrap{
+  width:200px;height:5px;
+  background:#1c1c1c;border-radius:3px;overflow:hidden;
+  margin-top:4px;
+}
+#lock-bar{
+  height:100%;width:0%;
+  background:#6868cc;border-radius:3px;
+  transition:width 0.08s linear;
+}
+
+/* ③ 下部情報バー */
+#info-bar{
+  height:34px;flex-shrink:0;
+  background:#080808;border-top:1px solid #191919;
+  display:flex;align-items:center;padding:0 10px;
+}
+#iris-display{font-family:monospace;font-size:11px;color:#3a3a3a;}
+#info-text{flex:1;text-align:center;font-size:11px;color:#484848;letter-spacing:0.04em;}
+#bottom-right-btns{display:flex;gap:5px;align-items:center;}
+.icon-btn{
+  font-size:11px;color:#3a3a3a;background:none;
+  border:1px solid #222;border-radius:4px;
+  padding:2px 8px;cursor:pointer;font-family:inherit;
+  transition:color 0.15s,border-color 0.15s;
+}
+.icon-btn:hover{color:#aaa;border-color:#555;}
+
+/* フラッシュ */
+#delete-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:72px;color:#ff4444;pointer-events:none;opacity:0;z-index:999;text-shadow:0 0 30px #ff444466;transition:opacity 0.15s;}
+#delete-flash.show{opacity:1;}
+#back-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:64px;color:#ddcc00;pointer-events:none;opacity:0;z-index:999;text-shadow:0 0 24px #ddcc0066;transition:opacity 0.15s;}
+#back-flash.show{opacity:1;}
+
+/* カメラプレビュー */
+#video-el{position:fixed;bottom:40px;right:10px;width:160px;height:120px;border-radius:8px;border:1px solid #333;object-fit:cover;transform:scaleX(-1);opacity:0.85;z-index:50;display:none;}
+#video-el.show{display:block;}
+#canvas-el{display:none;}
+
+/* 全文パネル */
+#fulltext-panel{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:150;flex-direction:column;padding:28px;gap:14px;}
+#fulltext-panel.open{display:flex;}
+#fulltext-body{flex:1;overflow-y:auto;background:#111;border-radius:10px;padding:20px 24px;font-size:22px;font-weight:300;letter-spacing:3px;line-height:2;color:#f0f0f0;white-space:pre-wrap;word-break:break-all;}
+#fulltext-close{align-self:flex-end;padding:7px 20px;border-radius:7px;border:1px solid #444;background:transparent;color:#999;font-size:13px;font-family:'Noto Sans JP',sans-serif;cursor:pointer;}
+#fulltext-close:hover{color:#f0f0f0;}
+</style>
+</head>
+<body>
+
+<!-- ===== CALIBRATION ===== -->
+<div id="calibration-screen">
+
+  <!-- 開始前 -->
+  <div id="cal-idle">
+    <div id="cal-idle-icon">👁</div>
+    <div id="cal-idle-title">恵理の文字入力システム</div>
+    <div id="cal-idle-sub">
+      カメラで視線と瞬きを検出します<br>
+      ボタンを押してキャリブレーションを開始してください
+    </div>
+    <button id="cal-start-btn" disabled onclick="startCalibration()">
+      キャリブレーション開始
+    </button>
+    <div id="cal-cam-status" style="font-size:12px;color:#555;">カメラへのアクセスを待っています…</div>
+  </div>
+
+  <!-- 計測中 -->
+  <div id="cal-running">
+    <div id="cal-dot" class="pulse"></div>
+    <div id="cal-instruction">
+      <div id="cal-phase-text">ここを見てください</div>
+      <div id="cal-phase-sub">3秒間、動かさずに</div>
+    </div>
+    <div id="ear-gauge-wrap">
+      <div id="ear-gauge-label">目の開き具合（EAR）</div>
+      <div id="ear-gauge-bar-bg"><div id="ear-gauge-bar"></div></div>
+      <div id="ear-value">EAR: —</div>
+    </div>
+  </div>
+
+  <!-- 完了 -->
+  <div id="cal-done">
+    <div id="cal-done-icon">✅</div>
+    <div id="cal-done-title">計測が終わりました</div>
+    <div id="cal-done-sub">画面を切り替えます</div>
+    <div id="cal-done-timer">3</div>
+  </div>
+
+</div>
+
+<!-- 隠しカメラ（キャリブレーション用） -->
+<video id="cal-video" autoplay playsinline muted style="display:none;"></video>
+
+<!-- ===== MAIN SCREEN ===== -->
+<div id="main-screen">
+
+  <!-- ① 入力バー -->
+  <div id="input-bar">
+    <div id="input-label">入力</div>
+    <div id="input-scroll"><span id="input-text"></span><span id="input-cursor"></span></div>
+    <button id="fulltext-btn" onclick="openFulltext()">全文 ▸</button>
+  </div>
+
+  <!-- ② メインエリア -->
+  <div id="main-area">
+
+    <!-- ロック -->
+    <div id="lock-overlay"><div id="lock-label">🔒　LOCK ON</div></div>
+
+    <!-- L/R判定ゾーン -->
+    <div class="gaze-zone" id="gaze-left"><span class="gaze-zone-label">L</span></div>
+    <div class="gaze-zone" id="gaze-right"><span class="gaze-zone-label">R</span></div>
+
+    <!-- 文字エリア（背景色用） -->
+    <div id="char-area">
+      <div id="char-left"></div>
+      <div id="char-right"></div>
+    </div>
+
+    <!-- ゲージ＋文字を縦にまとめて画面中央に配置 -->
+    <div id="center-group">
+      <!-- ① 瞬きカウント数字 -->
+      <div id="blink-count">0</div>
+      <!-- ② ロックバー -->
+      <div id="lock-bar-wrap"><div id="lock-bar"></div></div>
+      <!-- スペーサー 30px -->
+      <div style="height:30px;"></div>
+      <!-- ③ 文字（左右に分かれて表示） -->
+      <div id="chars-row">
+        <span class="half-chars row-mode" id="chars-left-text"></span>
+        <span class="half-chars row-mode" id="chars-right-text"></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ③ 下部情報バー -->
+  <div id="info-bar">
+    <span id="iris-display">iris: —</span>
+    <span id="info-text">左右を2秒→選択　瞬き3回→戻る　瞬き6回→1字削除　5秒目閉じ→ロック</span>
+    <div id="bottom-right-btns">
+      <button class="icon-btn" onclick="toggleCamPreview()">📷</button>
+      <button class="icon-btn" onclick="returnToCalibration()">🔧</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- フラッシュ -->
+<div id="delete-flash">⌫</div>
+<div id="back-flash">↩</div>
+
+<!-- 全文パネル -->
+<div id="fulltext-panel">
+  <div id="fulltext-body">（まだ文字が入力されていません）</div>
+  <button id="fulltext-close" onclick="closeFulltext()">閉じる</button>
+</div>
+
+<video id="video-el" autoplay playsinline muted></video>
+<canvas id="canvas-el"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script>
+// ============================================================
+//  DATA
+// ============================================================
+const ROWS  = ['あ','か','さ','た','な','は','ま','や','ら','わ','数','特'];
+const TABLE = {
+  'あ':['あ','い','う','え','お'],
+  'か':['か','き','く','け','こ'],
+  'さ':['さ','し','す','せ','そ'],
+  'た':['た','ち','つ','っ','て','と'],
+  'な':['な','に','ぬ','ね','の'],
+  'は':['は','ひ','ふ','へ','ほ'],
+  'ま':['ま','み','む','め','も'],
+  'や':['や','ゃ','ゆ','ゅ','よ','ょ','ー'],
+  'ら':['ら','り','る','れ','ろ'],
+  'わ':['わ','を','ん','。','！','？'],
+  '1-5':['1','2','3','4','5'],
+  '6-0':['6','7','8','9','0'],
+  '゛゜っょ?':['゛','゜','っ','ょ','?'],
+  '！、。～・':['！','、','。','～','・'],
+};
+const GROUPS = ['1-5','6-0','゛゜っょ?','！、。～・'];
+
+function getColCands(row){
+  if(row==='数') return ['1-5','6-0'];
+  if(row==='特') return ['゛゜っょ?','！、。～・'];
+  const ch=TABLE[row]; if(!ch) return [];
+  return ch.reduce((a,c,i)=>{ if(c!==null) a.push(i); return a; },[]);
+}
+function resolveChar(row,cand){
+  if(typeof cand==='number') return TABLE[row]?.[cand]??null;
+  return cand;
+}
+function avg(arr){ return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:null; }
+function splitHalf(arr){ const m=Math.ceil(arr.length/2); return [arr.slice(0,m),arr.slice(m)]; }
+
+// ============================================================
+//  LANDMARKS
+// ============================================================
+const L_EYE_TOP=[159,158,157], L_EYE_BOT=[145,153,144], L_EYE_L=33,  L_EYE_R=133;
+const R_EYE_TOP=[386,385,384], R_EYE_BOT=[374,380,373], R_EYE_L=362, R_EYE_R=263;
+const L_IRIS=468;
+
+function computeEAR(lm,top,bot,lx,rx){
+  const t=avg(top.map(i=>lm[i].y)), b=avg(bot.map(i=>lm[i].y));
+  const h=Math.abs(lm[rx].x-lm[lx].x);
+  return h<0.001?1.0:Math.abs(b-t)/h;
+}
+function getIrisRatio(lm){
+  if(!lm[L_IRIS]) return null;
+  const iris=lm[L_IRIS].x, el=lm[L_EYE_L].x, er=lm[L_EYE_R].x;
+  const w=Math.abs(er-el); if(w<0.001) return null;
+  return 1-(iris-el)/w;
+}
+
+// ============================================================
+//  THRESHOLDS（キャリブレーションで更新）
+// ============================================================
+let thresholds={
+  blinkEAR:      0.18,   // 瞬き判定（EAR以下で瞬きとみなす）
+  openEAR:       0.25,   // 普段の目の開き具合（キャリブレーションで更新）
+  gazeLeftRatio: 0.35,
+  gazeRightRatio:0.65,
+};
+
+// ============================================================
+//  CALIBRATION
+// ============================================================
+let calStream=null, calFaceMesh=null, calPhase='idle';
+let calSamples={center:[],left:[],right:[],ear:[]};
+let calRunning=false;
+
+const CAL_PHASES=[
+  {key:'ear',    text:'目を普通に開けてください', sub:'3秒間、自然な状態で', dotX:()=>50,  dotY:()=>50},
+  {key:'center', text:'中央の丸を見つめてください', sub:'3秒間、動かさずに',   dotX:()=>50,  dotY:()=>50},
+  {key:'left',   text:'左の丸を見つめてください',  sub:'3秒間、動かさずに',   dotX:()=>8,   dotY:()=>50},
+  {key:'right',  text:'右の丸を見つめてください',  sub:'3秒間、動かさずに',   dotX:()=>92,  dotY:()=>50},
+];
+
+async function setupCalCamera(){
+  try{
+    calStream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'}});
+    document.getElementById('cal-video').srcObject=calStream;
+    document.getElementById('cal-start-btn').disabled=false;
+    document.getElementById('cal-cam-status').textContent='カメラ準備完了。ボタンを押してください。';
+  }catch(e){
+    document.getElementById('cal-cam-status').textContent='カメラにアクセスできません: '+e.message;
+  }
+}
+
+async function startCalibration(){
+  if(calRunning) return;
+  calRunning=true;
+  document.getElementById('cal-start-btn').disabled=true;
+  calSamples={center:[],left:[],right:[],ear:[]};
+
+  // FaceMesh起動
+  calFaceMesh=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
+  calFaceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+  calFaceMesh.onResults(onCalResults);
+  const vid=document.getElementById('cal-video');
+  const cam=new Camera(vid,{onFrame:async()=>{await calFaceMesh.send({image:vid});},width:640,height:480});
+  await cam.start();
+
+  // 画面切り替え
+  document.getElementById('cal-idle').style.display='none';
+  document.getElementById('cal-running').style.display='block';
+
+  const dot=document.getElementById('cal-dot');
+  const stage=document.getElementById('cal-running');
+
+  for(let pi=0; pi<CAL_PHASES.length; pi++){
+    const ph=CAL_PHASES[pi];
+    const xPct=ph.dotX(), yPct=ph.dotY();
+
+    // 丸を移動（transitionで滑らかに）
+    dot.style.left=xPct+'%';
+    dot.style.top =yPct+'%';
+
+    // テキスト更新
+    document.getElementById('cal-phase-text').textContent=ph.text;
+    document.getElementById('cal-phase-sub').textContent=ph.sub;
+
+    // 移動完了まで待つ（2秒）
+    await sleep(2000);
+
+    // 計測3秒
+    calPhase=ph.key;
+    await sleep(3200);
+    calPhase='idle';
+  }
+
+  // 完了
+  computeThresholds();
+  showCalDone();
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+function onCalResults(results){
+  if(!results.multiFaceLandmarks?.[0]) return;
+  const lm=results.multiFaceLandmarks[0];
+
+  // EARを常時表示
+  const earL=computeEAR(lm,L_EYE_TOP,L_EYE_BOT,L_EYE_L,L_EYE_R);
+  const earR=computeEAR(lm,R_EYE_TOP,R_EYE_BOT,R_EYE_L,R_EYE_R);
+  const ear=(earL+earR)/2;
+  const pct=Math.min(ear/0.4*100,100);
+  document.getElementById('ear-gauge-bar').style.width=pct+'%';
+  document.getElementById('ear-value').textContent=`EAR: ${ear.toFixed(3)}`;
+
+  if(calPhase==='idle') return;
+
+  if(calPhase==='ear'){
+    calSamples.ear.push(ear);
+  } else {
+    const ratio=getIrisRatio(lm);
+    if(ratio!==null) calSamples[calPhase].push(ratio);
+  }
+}
+
+function computeThresholds(){
+  const c=avg(calSamples.center);
+  const l=avg(calSamples.left);
+  const r=avg(calSamples.right);
+  const e=avg(calSamples.ear);
+  if(l!==null&&c!==null) thresholds.gazeLeftRatio=(l+c)/2;
+  if(r!==null&&c!==null) thresholds.gazeRightRatio=(c+r)/2;
+  if(e!==null){
+    thresholds.openEAR=e;
+    // 瞬き閾値 = 普段の開き具合 × 0.65
+    thresholds.blinkEAR=Math.max(e*0.65, 0.10);
+  }
+}
+
+function showCalDone(){
+  document.getElementById('cal-running').style.display='none';
+  document.getElementById('cal-done').style.display='flex';
+  let count=3;
+  document.getElementById('cal-done-timer').textContent=count;
+  const iv=setInterval(()=>{
+    count--;
+    document.getElementById('cal-done-timer').textContent=count;
+    if(count<=0){ clearInterval(iv); enterMain(); }
+  },1000);
+}
+
+async function enterMain(){
+  document.getElementById('calibration-screen').style.display='none';
+  document.getElementById('main-screen').classList.add('active');
+  updatePips(0, false); // 0を初期表示
+  renderZones(); renderOutput();
+  let stream=calStream;
+  if(!stream){
+    try{ stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'}}); }
+    catch(e){ return; }
+  }
+  document.getElementById('video-el').srcObject=stream;
+  startFaceMesh(document.getElementById('video-el'));
+}
+
+// ============================================================
+//  MEDIAPIPE MAIN
+// ============================================================
+function startFaceMesh(video){
+  const fm=new FaceMesh({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
+  fm.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+  fm.onResults(onMainResults);
+  const cam=new Camera(video,{onFrame:async()=>{await fm.send({image:video});},width:640,height:480});
+  cam.start();
+}
+
+function onMainResults(results){
+  if(!results.multiFaceLandmarks?.[0]){
+    document.getElementById('iris-display').textContent='iris: (顔なし)'; return;
+  }
+  const lm=results.multiFaceLandmarks[0];
+  processGaze(lm);
+  processEyeClose(lm);
+  processBlink(lm);
+}
+
+// ============================================================
+//  GAZE + DWELL（背景グラデーション方式）
+// ============================================================
+let gazeSmooth=0.5;
+const GAZE_ALPHA=0.2;
+let currentGazeZone='center';
+const DWELL_TIME=2000; // 2秒
+let dwellZone=null, dwellStart=0, dwellConfirmed=false;
+let dwellRafId=null;
+
+function processGaze(lm){
+  const ratio=getIrisRatio(lm); if(ratio===null) return;
+  gazeSmooth=gazeSmooth*(1-GAZE_ALPHA)+ratio*GAZE_ALPHA;
+  let zone;
+  if     (gazeSmooth<thresholds.gazeLeftRatio)  zone='left';
+  else if(gazeSmooth>thresholds.gazeRightRatio) zone='right';
+  else                                           zone='center';
+  document.getElementById('iris-display').textContent=`iris: ${gazeSmooth.toFixed(3)}`;
+  if(zone!==currentGazeZone){ currentGazeZone=zone; resetDwell(); }
+  if((zone==='left'||zone==='right')&&!inputLocked) updateDwell(zone);
+  else resetDwell();
+}
+
+function updateDwell(zone){
+  const now=Date.now();
+  if(dwellZone!==zone){
+    dwellZone=zone; dwellStart=now; dwellConfirmed=false;
+    setDwellLevel(zone,0);
+  }
+  if(dwellConfirmed) return;
+  const elapsed=now-dwellStart;
+  const pct=elapsed/DWELL_TIME; // 0〜1
+  // 4段階で明るくなる
+  const level=pct<0.25?0:pct<0.5?1:pct<0.75?2:pct<1.0?3:4;
+  setDwellLevel(zone,level);
+  if(elapsed>=DWELL_TIME){ dwellConfirmed=true; confirmGaze(zone); }
+}
+
+function setDwellLevel(zone,level){
+  const el=document.getElementById('gaze-'+zone);
+  el.className='gaze-zone';
+  if(level>0) el.classList.add('dwelling-'+Math.min(level,4));
+}
+
+function resetDwell(){
+  if(dwellZone){
+    setDwellLevel(dwellZone,0);
+  }
+  dwellZone=null; dwellConfirmed=false;
+}
+
+function confirmGaze(side){
+  const el=document.getElementById('gaze-'+side);
+  el.classList.add('confirmed');
+  setTimeout(()=>{ el.className='gaze-zone'; },500);
+  narrowDown(side);
+  dwellConfirmed=false; dwellStart=Date.now();
+}
+
+// ============================================================
+//  EYE CLOSE → LOCK (5秒)
+// ============================================================
+let eyeCloseStart=0, inEyeClose=false;
+const LOCK_CLOSE_MS=5000;
+
+function processEyeClose(lm){
+  const earL=computeEAR(lm,L_EYE_TOP,L_EYE_BOT,L_EYE_L,L_EYE_R);
+  const earR=computeEAR(lm,R_EYE_TOP,R_EYE_BOT,R_EYE_L,R_EYE_R);
+  const ear=(earL+earR)/2;
+  const now=Date.now();
+  if(ear<thresholds.blinkEAR&&!inEyeClose){
+    inEyeClose=true; eyeCloseStart=now;
+  } else if(ear<thresholds.blinkEAR&&inEyeClose&&!inputLocked){
+    const elapsed=now-eyeCloseStart;
+    document.getElementById('lock-bar').style.width=Math.min(elapsed/LOCK_CLOSE_MS*100,100)+'%';
+    if(elapsed>=LOCK_CLOSE_MS){ setLock(true); inEyeClose=false; }
+  } else if(ear>=thresholds.blinkEAR&&inEyeClose){
+    inEyeClose=false;
+    if(!inputLocked) document.getElementById('lock-bar').style.width='0%';
+  }
+}
+
+// ============================================================
+//  BLINK（1.5倍の時間）
+// ============================================================
+let inBlink=false, lastBlinkTime=0;
+const MIN_BLINK_INTERVAL=240;  // 160→240ms
+let blinkCount=0, blinkTimer=null;
+const BLINK_WINDOW=2000;       // 1300→2000ms
+let lockOffCount=0, lockOffTimer=null;
+const LOCK_OFF_BLINKS=10;
+
+function processBlink(lm){
+  const earL=computeEAR(lm,L_EYE_TOP,L_EYE_BOT,L_EYE_L,L_EYE_R);
+  const earR=computeEAR(lm,R_EYE_TOP,R_EYE_BOT,R_EYE_L,R_EYE_R);
+  const ear=(earL+earR)/2, now=Date.now();
+  if(ear<thresholds.blinkEAR&&!inBlink){ inBlink=true; }
+  else if(ear>=thresholds.blinkEAR&&inBlink){
+    inBlink=false;
+    const dur=now-eyeCloseStart;
+    if(dur>400) return; // 長目閉じはスキップ
+    if(now-lastBlinkTime<MIN_BLINK_INTERVAL) return;
+    lastBlinkTime=now;
+    registerBlink();
+  }
+}
+
+function registerBlink(){
+  if(inputLocked){
+    lockOffCount=Math.min(lockOffCount+1,LOCK_OFF_BLINKS);
+    updatePips(lockOffCount,true);
+    clearTimeout(lockOffTimer);
+    lockOffTimer=setTimeout(()=>{
+      if(lockOffCount>=LOCK_OFF_BLINKS) setLock(false);
+      lockOffCount=0; updatePips(0,true);
+    },BLINK_WINDOW);
+    return;
+  }
+  blinkCount=Math.min(blinkCount+1,10);
+  updatePips(blinkCount,false);
+  clearTimeout(blinkTimer);
+  blinkTimer=setTimeout(()=>{ processBlinkCount(blinkCount); blinkCount=0; updatePips(0,false); },BLINK_WINDOW);
+}
+
+function processBlinkCount(n){
+  if(n===3){
+    const bf=document.getElementById('back-flash');
+    bf.classList.add('show');
+    setTimeout(()=>bf.classList.remove('show'),900);
+    if(popState()) renderZones(); else resetInputSilent();
+  } else if(n===6||n===7){
+    const df=document.getElementById('delete-flash');
+    df.classList.add('show');
+    setTimeout(()=>{ df.classList.remove('show'); deleteLast(); blinkCount=0; updatePips(0,false); },800);
+  }
+  // 1,2,4,5,8,9,10：何もしない
+}
+
+function updatePips(n, lockMode){
+  const el = document.getElementById('blink-count');
+  if(!el) return;
+  el.textContent = String(n);
+  if(n === 0){
+    el.className = 'c-gray0'; // 常時グレーで0表示
+    return;
+  }
+  const idx = lockMode ? Math.min(n - 1 + 6, 9) : Math.min(n - 1, 9);
+  el.className = 'c-' + idx;
+}
+
+// ============================================================
+//  LOCK
+// ============================================================
+let inputLocked=false;
+function setLock(locked){
+  inputLocked=locked;
+  document.getElementById('lock-overlay').classList.toggle('active',locked);
+  document.getElementById('lock-bar').style.width='0%';
+  document.getElementById('info-text').textContent=locked
+    ?'🔒 LOCK ON　瞬き10回でロック解除'
+    :'左右を2秒→選択　瞬き3回→戻る　瞬き6回→1字削除　5秒目閉じ→ロック';
+  if(locked) resetDwell();
+}
+
+// ============================================================
+//  INPUT STATE
+// ============================================================
+let phase='row', rowCands=[...ROWS], colCands=[], selectedRow=null;
+let stateStack=[], outputChars=[], historyAll='';
+
+function pushState(){ stateStack.push({phase,rowCands:[...rowCands],colCands:[...colCands],selectedRow}); }
+function popState(){
+  if(!stateStack.length) return false;
+  const s=stateStack.pop(); phase=s.phase; rowCands=s.rowCands; colCands=s.colCands; selectedRow=s.selectedRow;
+  return true;
+}
+
+function narrowDown(side){
+  pushState();
+  const cands=phase==='row'?rowCands:colCands;
+  const [L,R]=splitHalf(cands);
+  const chosen=side==='left'?L:(R.length?R:L);
+  if(!chosen.length){stateStack.pop();return;}
+  if(phase==='row') rowCands=chosen; else colCands=chosen;
+  const updated=phase==='row'?rowCands:colCands;
+  if(updated.length===1) setTimeout(commitCurrent,150); else renderZones();
+}
+
+function commitCurrent(){
+  if(phase==='row'){
+    const row=rowCands[0]; pushState();
+    selectedRow=row; phase='col'; colCands=getColCands(row);
+    if(colCands.length===1){setTimeout(commitCurrent,150);return;}
+    renderZones();
+  } else {
+    const cand=colCands[0];
+    if(typeof cand==='string'&&GROUPS.includes(cand)){
+      pushState(); selectedRow=cand; phase='col';
+      colCands=TABLE[cand].map((_,i)=>i);
+      if(colCands.length===1){setTimeout(commitCurrent,150);return;}
+      renderZones();
+    } else {
+      const char=resolveChar(selectedRow,cand);
+      if(char) addChar(char);
+      stateStack=[]; resetInputSilent();
+    }
+  }
+}
+
+function resetInputSilent(){
+  phase='row'; rowCands=[...ROWS]; colCands=[]; selectedRow=null; renderZones();
+}
+function deleteLast(){ if(outputChars.length){ outputChars.pop(); renderOutput(); } }
+function addChar(ch){ outputChars.push(ch); historyAll+=ch; renderOutput(); }
+
+// ============================================================
+//  RENDER
+// ============================================================
+function renderZones(){
+  const cands=phase==='row'?rowCands:colCands;
+  const [L,R]=splitHalf(cands);
+
+  // 文字変換
+  const toChars=keys=>{
+    if(phase==='row') return keys.map(k=>k);
+    return keys.map(k=>{
+      if(typeof k==='number') return TABLE[selectedRow]?.[k]??'';
+      if(k==='1-5') return '1〜5'; if(k==='6-0') return '6〜0'; return k;
+    });
+  };
+
+  const leftChars  = toChars(L);
+  const rightChars = toChars(R);
+
+  // 半角スペース1つ区切り
+  const leftStr  = leftChars.join(' ');
+  const rightStr = rightChars.length ? rightChars.join(' ') : '—';
+
+  // 色クラス：行=白、段=黄
+  const colorClass = phase==='row' ? 'half-chars row-mode' : 'half-chars col-mode';
+
+  // 左右それぞれのspanに書き込む
+  const lEl = document.getElementById('chars-left-text');
+  const rEl = document.getElementById('chars-right-text');
+  lEl.className = colorClass;
+  rEl.className = colorClass;
+  lEl.textContent = leftStr;
+  rEl.textContent = rightStr;
+
+  // 背景明るさ（階層深度）
+  const depth=stateStack.length;
+  const ratio=Math.min(depth/6,1.0);
+  const al=0.18+ratio*0.35;
+  const wh=ratio*0.10;
+  document.getElementById('char-left').style.background =
+    `linear-gradient(rgba(255,255,255,${wh}),rgba(255,255,255,${wh})),rgba(40,110,60,${al})`;
+  document.getElementById('char-right').style.background =
+    `linear-gradient(rgba(255,255,255,${wh}),rgba(255,255,255,${wh})),rgba(35,55,130,${al})`;
+}
+
+function renderOutput(){
+  document.getElementById('input-text').textContent=outputChars.slice(-18).join('');
+}
+
+// ============================================================
+//  CALIBRATION RETURN
+// ============================================================
+function returnToCalibration(){
+  inputLocked=false; blinkCount=0; lockOffCount=0;
+  updatePips(0,false);
+  document.getElementById('lock-overlay').classList.remove('active');
+  document.getElementById('lock-bar').style.width='0%';
+  resetInputSilent();
+  document.getElementById('main-screen').classList.remove('active');
+  // キャリブレーション画面リセット
+  const cs=document.getElementById('calibration-screen');
+  cs.style.display='flex';
+  document.getElementById('cal-idle').style.display='flex';
+  document.getElementById('cal-running').style.display='none';
+  document.getElementById('cal-done').style.display='none';
+  document.getElementById('cal-start-btn').disabled=false;
+  calRunning=false;
+  const saved=outputChars.length;
+  document.getElementById('cal-cam-status').textContent=
+    saved>0?`💾 入力済み ${saved}文字を保持中`:'キャリブレーションをやり直します';
+}
+
+// ============================================================
+//  UTILS
+// ============================================================
+let camPreviewVisible=false;
+function toggleCamPreview(){
+  camPreviewVisible=!camPreviewVisible;
+  document.getElementById('video-el').classList.toggle('show',camPreviewVisible);
+}
+function openFulltext(){
+  document.getElementById('fulltext-body').textContent=historyAll||'（まだ文字が入力されていません）';
+  document.getElementById('fulltext-panel').classList.add('open');
+}
+function closeFulltext(){ document.getElementById('fulltext-panel').classList.remove('open'); }
+
+// ============================================================
+//  KEYBOARD FALLBACK
+// ============================================================
+document.addEventListener('keydown',e=>{
+  if(!document.getElementById('main-screen').classList.contains('active')) return;
+  if(e.key==='ArrowLeft') { e.preventDefault(); if(!inputLocked) confirmGaze('left');  }
+  if(e.key==='ArrowRight'){ e.preventDefault(); if(!inputLocked) confirmGaze('right'); }
+  if(e.key===' ')         { e.preventDefault(); registerBlink(); }
+  if(e.key==='l'||e.key==='L'){ e.preventDefault(); setLock(!inputLocked); }
+  if(e.key==='r'||e.key==='R'){ e.preventDefault(); returnToCalibration(); }
+  if(e.key==='h'||e.key==='H'){
+    e.preventDefault();
+    document.getElementById('fulltext-panel').classList.contains('open')?closeFulltext():openFulltext();
+  }
+});
+
+// ============================================================
+//  INIT
+// ============================================================
+setupCalCamera();
+</script>
+</body>
+</html>
