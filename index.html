@@ -102,21 +102,34 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
 #input-bar{
   height:56px;flex-shrink:0;
   background:#0a0a0a;border-bottom:1px solid #1c1c1c;
-  display:flex;align-items:center;padding:0 12px;gap:10px;
+  display:flex;align-items:center;padding:0 0 0 12px;gap:0;
 }
-#input-label{font-size:11px;color:#444;white-space:nowrap;}
-#input-scroll{flex:1;overflow:hidden;}
-#input-text{font-size:26px;font-weight:300;letter-spacing:3px;color:#f0f0f0;white-space:nowrap;}
+#input-label{font-size:11px;color:#444;white-space:nowrap;padding-right:8px;}
+#input-scroll{
+  width:calc(50% - 60px); /* 画面左半分・ラベル分引く */
+  overflow:hidden;
+  text-align:right; /* 右寄せ：末尾が中央寄り */
+  flex-shrink:0;
+}
+#input-text{font-size:26px;font-weight:300;letter-spacing:3px;color:#f0f0f0;white-space:nowrap;display:inline;}
 #input-cursor{
   display:inline-block;width:2px;height:26px;
   background:#f0f0f0;margin-left:2px;vertical-align:middle;
   animation:cur 1s step-end infinite;
 }
 @keyframes cur{50%{opacity:0;}}
+#input-lock-hint{
+  flex:1;
+  font-size:20px;font-weight:300;letter-spacing:0.25em;
+  color:#999;
+  text-align:center;
+  white-space:nowrap;
+}
 #fulltext-btn{
   font-size:11px;color:#555;background:none;
   border:1px solid #2a2a2a;border-radius:4px;
   padding:3px 10px;cursor:pointer;font-family:inherit;white-space:nowrap;
+  margin-right:10px;
 }
 #fulltext-btn:hover{color:#aaa;border-color:#555;}
 
@@ -130,7 +143,7 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
   display:flex;align-items:center;justify-content:center;
 }
 #lock-overlay.active{opacity:1;}
-#lock-label{font-size:20px;font-weight:300;letter-spacing:0.25em;color:#666;}
+#lock-label{font-size:20px;font-weight:300;letter-spacing:0.25em;color:#999;}
 
 /* L/R 判定ゾーン（各6%） — バーなし、背景色変化 */
 .gaze-zone{
@@ -207,25 +220,21 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
 }
 /* ① 瞬きカウント数字 */
 #blink-count{
-  font-size:52px;font-weight:300;
-  line-height:1;
-  color:#333;
-  transition:color 0.12s, text-shadow 0.12s;
-  min-width:1ch;text-align:center;
+  font-size:36px;font-weight:300;
+  line-height:1.2;
+  transition:color 0.12s;
+  text-align:center;white-space:nowrap;
+  letter-spacing:0.03em;
 }
-/* 0：ほぼ見えないグレーで常時表示 */
-#blink-count.c-gray0{ color:#333; text-shadow:none; }
-/* 回数別の色 */
-#blink-count.c-0{ color:#666; text-shadow:none; }
-#blink-count.c-1{ color:#666; text-shadow:none; }
-#blink-count.c-2{ color:#ddcc00; text-shadow:0 0 12px #ddcc0088; }
-#blink-count.c-3{ color:#666; text-shadow:none; }
-#blink-count.c-4{ color:#666; text-shadow:none; }
-#blink-count.c-5{ color:#ff1111; text-shadow:0 0 16px #ff111199; }
-#blink-count.c-6{ color:#ff0000; text-shadow:0 0 20px #ff0000bb; }
-#blink-count.c-7{ color:#777; text-shadow:none; }
-#blink-count.c-8{ color:#aaa; text-shadow:none; }
-#blink-count.c-9{ color:#ddd; text-shadow:0 0 8px #dddddd88; }
+/* クラスで色を完全制御（IDより優先させるため!importantを使用） */
+.c-gray0 { color:#444    !important; }
+.c-lock  { color:#999    !important; }
+.c-gray1 { color:#999    !important; }
+.c-yellow{ color:#ffee44 !important; }
+.c-red   { color:#ff5555 !important; }
+.c-warn8 { color:#ffaa00 !important; }
+.c-unlock{ color:#55ffaa !important; }
+.c-blue  { color:#55bbff !important; }
 
 /* ② 目閉じゲージ */
 #lock-bar-wrap{
@@ -257,9 +266,9 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
 .icon-btn:hover{color:#aaa;border-color:#555;}
 
 /* フラッシュ */
-#delete-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:72px;color:#ff4444;pointer-events:none;opacity:0;z-index:999;text-shadow:0 0 30px #ff444466;transition:opacity 0.15s;}
+#delete-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:72px;color:#ff4444;pointer-events:none;opacity:0;z-index:999;transition:opacity 0.15s;}
 #delete-flash.show{opacity:1;}
-#back-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:64px;color:#ddcc00;pointer-events:none;opacity:0;z-index:999;text-shadow:0 0 24px #ddcc0066;transition:opacity 0.15s;}
+#back-flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:64px;color:#ddcc00;pointer-events:none;opacity:0;z-index:999;transition:opacity 0.15s;}
 #back-flash.show{opacity:1;}
 
 /* カメラプレビュー */
@@ -268,7 +277,7 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
 #canvas-el{display:none;}
 
 /* 全文パネル */
-#fulltext-panel{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:150;flex-direction:column;padding:28px;gap:14px;}
+#fulltext-panel{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:150;flex-direction:column;padding:60px 28px 28px;gap:14px;}
 #fulltext-panel.open{display:flex;}
 #fulltext-body{flex:1;overflow-y:auto;background:#111;border-radius:10px;padding:20px 24px;font-size:22px;font-weight:300;letter-spacing:3px;line-height:2;color:#f0f0f0;white-space:pre-wrap;word-break:break-all;}
 #fulltext-close{align-self:flex-end;padding:7px 20px;border-radius:7px;border:1px solid #444;background:transparent;color:#999;font-size:13px;font-family:'Noto Sans JP',sans-serif;cursor:pointer;}
@@ -328,6 +337,7 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
   <div id="input-bar">
     <div id="input-label">入力</div>
     <div id="input-scroll"><span id="input-text"></span><span id="input-cursor"></span></div>
+    <div id="input-lock-hint">目を閉じて5秒でロック</div>
     <button id="fulltext-btn" onclick="openFulltext()">全文 ▸</button>
   </div>
 
@@ -382,6 +392,11 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
 
 <!-- 全文パネル -->
 <div id="fulltext-panel">
+  <div id="fulltext-blink-count" style="
+    position:absolute;top:16px;left:50%;transform:translateX(-50%);
+    font-size:36px;font-weight:300;text-align:center;white-space:nowrap;
+    letter-spacing:0.03em;pointer-events:none;z-index:10;
+  "></div>
   <div id="fulltext-body">（まだ文字が入力されていません）</div>
   <button id="fulltext-close" onclick="closeFulltext()">閉じる</button>
 </div>
@@ -568,13 +583,24 @@ function computeThresholds(){
 
 function showCalDone(){
   document.getElementById('cal-running').style.display='none';
-  document.getElementById('cal-done').style.display='flex';
+  const doneEl=document.getElementById('cal-done');
+  doneEl.style.display='flex';
+  // 完了テキスト表示
+  document.getElementById('cal-done-title').textContent='計測が終わりました';
+  document.getElementById('cal-done-sub').textContent='画面を切り替えます';
   let count=3;
   document.getElementById('cal-done-timer').textContent=count;
   const iv=setInterval(()=>{
     count--;
     document.getElementById('cal-done-timer').textContent=count;
-    if(count<=0){ clearInterval(iv); enterMain(); }
+    if(count<=0){
+      clearInterval(iv);
+      // 「左右に視線を送って…」メッセージを1秒表示してから遷移
+      document.getElementById('cal-done-title').textContent='左右に視線を送って文字を振り分けてください。';
+      document.getElementById('cal-done-sub').textContent='';
+      document.getElementById('cal-done-timer').textContent='';
+      setTimeout(()=>{ enterMain(); },2500);
+    }
   },1000);
 }
 
@@ -603,10 +629,21 @@ function startFaceMesh(video){
   cam.start();
 }
 
+// 顔認識なしタイマー
+let noFaceTimer=null;
+const NO_FACE_LOCK_MS=10000;
+
 function onMainResults(results){
   if(!results.multiFaceLandmarks?.[0]){
-    document.getElementById('iris-display').textContent='iris: (顔なし)'; return;
+    document.getElementById('iris-display').textContent='iris: (顔なし)';
+    // 顔が見えない→10秒後にロック
+    if(!noFaceTimer&&!inputLocked){
+      noFaceTimer=setTimeout(()=>{ setLock(true); noFaceTimer=null; },NO_FACE_LOCK_MS);
+    }
+    return;
   }
+  // 顔が戻ったらタイマーをキャンセル
+  if(noFaceTimer){ clearTimeout(noFaceTimer); noFaceTimer=null; }
   const lm=results.multiFaceLandmarks[0];
   processGaze(lm);
   processEyeClose(lm);
@@ -722,11 +759,11 @@ function processBlink(lm){
 
 function registerBlink(){
   if(inputLocked){
-    lockOffCount=Math.min(lockOffCount+1,LOCK_OFF_BLINKS);
+    lockOffCount=Math.min(lockOffCount+1,21);
     updatePips(lockOffCount,true);
     clearTimeout(lockOffTimer);
     lockOffTimer=setTimeout(()=>{
-      if(lockOffCount>=LOCK_OFF_BLINKS) setLock(false);
+      processLockedBlinkCount(lockOffCount);
       lockOffCount=0; updatePips(0,true);
     },BLINK_WINDOW);
     return;
@@ -737,6 +774,7 @@ function registerBlink(){
   blinkTimer=setTimeout(()=>{ processBlinkCount(blinkCount); blinkCount=0; updatePips(0,false); },BLINK_WINDOW);
 }
 
+// 通常時のまばたき処理
 function processBlinkCount(n){
   if(n===3){
     const bf=document.getElementById('back-flash');
@@ -748,19 +786,90 @@ function processBlinkCount(n){
     df.classList.add('show');
     setTimeout(()=>{ df.classList.remove('show'); deleteLast(); blinkCount=0; updatePips(0,false); },800);
   }
-  // 1,2,4,5,8,9,10：何もしない
+  // 10は数字のみ表示・何もしない。1,2,4,5,8,9も同様
 }
 
-function updatePips(n, lockMode){
-  const el = document.getElementById('blink-count');
-  if(!el) return;
-  el.textContent = String(n);
-  if(n === 0){
-    el.className = 'c-gray0'; // 常時グレーで0表示
+// ロック中のまばたき処理
+function processLockedBlinkCount(n){
+  const isFulltextOpen = document.getElementById('fulltext-panel').classList.contains('open');
+
+  if(isFulltextOpen){
+    // 全文パネル表示中
+    if(n===10 || n===11){
+      closeFulltext();
+      lockOffCount=0; updatePips(0,true);
+    } else if(n===15 || n===16){
+      closeFulltext();
+      lockOffCount=0; updatePips(0,true);
+      returnToCalibration();
+      setTimeout(()=>{ startCalibration(); },3000);
+    } else if(n===21){
+      lockOffCount=0; updatePips(0,true);
+    }
+    // 1〜9, 12〜14, 17〜20：無反応
     return;
   }
-  const idx = lockMode ? Math.min(n - 1 + 6, 9) : Math.min(n - 1, 9);
-  el.className = 'c-' + idx;
+
+  // 通常のロック中
+  if(n===10 || n===11){
+    setLock(false);
+    lockOffCount=0; updatePips(0,false);
+  } else if(n===15 || n===16){
+    openFulltext();
+    lockOffCount=0; updatePips(0,true);
+  } else if(n===21){
+    lockOffCount=0; updatePips(0,true);
+  }
+  // 1〜9, 12〜14, 17〜20：無反応
+}
+
+// カウント表示テキストと色
+function updatePips(n, lockMode){
+  // メイン画面のカウント
+  const el=document.getElementById('blink-count');
+  // 全文パネルのカウント
+  const fel=document.getElementById('fulltext-blink-count');
+
+  let text=String(n);
+  let cls='c-gray0';
+
+  if(lockMode){
+    const isOpen = document.getElementById('fulltext-panel').classList.contains('open');
+    if(n===0){
+      text='0'; cls='c-gray0';
+    } else if(isOpen){
+      // 全文パネル中
+      if     (n===10) { text='10　ロック画面に戻ります'; cls='c-blue';   }
+      else if(n===11) { text='11　ロック画面に戻ります'; cls='c-blue';   }
+      else if(n===15) { text='15　再度、視線調整';       cls='c-warn8';  }
+      else if(n===16) { text='16　再度、視線調整';       cls='c-warn8';  }
+      else if(n===21) { text='カウントを0に戻します';    cls='c-lock';   }
+      else            { text=String(n);                  cls='c-lock';   }
+    } else {
+      // 通常ロック中
+      if     (n===10) { text='10　ロック解除';           cls='c-unlock'; }
+      else if(n===11) { text='11　ロック解除';           cls='c-unlock'; }
+      else if(n===15) { text='15　全文を開きます';       cls='c-blue';   }
+      else if(n===16) { text='16　全文を開きます';       cls='c-blue';   }
+      else if(n===21) { text='カウントを0に戻します';    cls='c-lock';   }
+      else            { text=String(n);                  cls='c-lock';   }
+    }
+  } else {
+    if     (n===0)  { text='0';             cls='c-gray0';  }
+    else if(n===1)  { text='1';             cls='c-gray1';  }
+    else if(n===2)  { text='2';             cls='c-gray1';  }
+    else if(n===3)  { text='3　戻る';       cls='c-yellow'; }
+    else if(n===4)  { text='4';             cls='c-gray1';  }
+    else if(n===5)  { text='5';             cls='c-gray1';  }
+    else if(n===6)  { text='6　一文字削除'; cls='c-red';    }
+    else if(n===7)  { text='7　一文字削除'; cls='c-red';    }
+    else if(n===8)  { text='8';             cls='c-gray1';  }
+    else if(n===9)  { text='9';             cls='c-gray1';  }
+    else if(n===10) { text='10';            cls='c-gray1';  }
+  }
+
+  if(el)  { el.textContent=text;  el.className=cls; }
+  if(fel) { fel.textContent=text; fel.className=cls; }
 }
 
 // ============================================================
@@ -774,6 +883,10 @@ function setLock(locked){
   document.getElementById('info-text').textContent=locked
     ?'🔒 LOCK ON　瞬き10回でロック解除'
     :'左右を2秒→選択　瞬き3回→戻る　瞬き6回→1字削除　5秒目閉じ→ロック';
+  // 右上ヒントテキストを切り替え
+  document.getElementById('input-lock-hint').textContent=locked
+    ?'まばたき10回でロック解除'
+    :'目を閉じて5秒でロック';
   if(locked) resetDwell();
 }
 
