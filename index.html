@@ -207,8 +207,8 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
   line-height:1.4;white-space:nowrap;
   transition:color 0.3s;
 }
-.half-chars.row-mode{ color:#f0f0f0; }
-.half-chars.col-mode{ color:#ffdd44; }
+.half-chars.row-mode{ color:#ffee44; }   /* 行：黄色 */
+.half-chars.col-mode{ color:#f0f0f0; }   /* 段：白 */
 
 /* ゲージエリア（文字の30px上に配置・下寄せ） */
 #gauge-area{
@@ -277,11 +277,9 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
 #canvas-el{display:none;}
 
 /* 全文パネル */
-#fulltext-panel{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:150;flex-direction:column;padding:60px 28px 28px;gap:14px;}
+#fulltext-panel{display:none;position:fixed;inset:0;background:#0a0a0a;z-index:150;flex-direction:column;padding:24px 28px 24px;}
 #fulltext-panel.open{display:flex;}
 #fulltext-body{flex:1;overflow-y:auto;background:#111;border-radius:10px;padding:20px 24px;font-size:22px;font-weight:300;letter-spacing:3px;line-height:2;color:#f0f0f0;white-space:pre-wrap;word-break:break-all;}
-#fulltext-close{align-self:flex-end;padding:7px 20px;border-radius:7px;border:1px solid #444;background:transparent;color:#999;font-size:13px;font-family:'Noto Sans JP',sans-serif;cursor:pointer;}
-#fulltext-close:hover{color:#f0f0f0;}
 </style>
 </head>
 <body>
@@ -392,13 +390,34 @@ html,body{width:100%;height:100%;background:#111;color:#f0f0f0;font-family:'Noto
 
 <!-- 全文パネル -->
 <div id="fulltext-panel">
-  <div id="fulltext-blink-count" style="
-    position:absolute;top:16px;left:50%;transform:translateX(-50%);
-    font-size:36px;font-weight:300;text-align:center;white-space:nowrap;
-    letter-spacing:0.03em;pointer-events:none;z-index:10;
-  "></div>
+  <!-- カウンター行：左ヒント / 中央カウント / 右ヒント -->
+  <div style="display:flex;align-items:center;width:100%;margin-bottom:12px;gap:8px;flex-shrink:0;">
+    <div style="flex:1;text-align:left;font-size:20px;font-weight:300;letter-spacing:0.15em;color:#999;white-space:nowrap;">
+      まばたき10回　ロック画面に戻る
+    </div>
+    <div id="fulltext-blink-count" style="
+      font-size:36px;font-weight:300;text-align:center;white-space:nowrap;
+      letter-spacing:0.03em;pointer-events:none;min-width:80px;
+    "></div>
+    <div style="flex:1;text-align:right;font-size:20px;font-weight:300;letter-spacing:0.15em;color:#999;white-space:nowrap;">
+      まばたき15回　再度、視線調整
+    </div>
+  </div>
+  <!-- 本文 -->
   <div id="fulltext-body">（まだ文字が入力されていません）</div>
-  <button id="fulltext-close" onclick="closeFulltext()">閉じる</button>
+  <!-- 下部ボタン -->
+  <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:12px;flex-shrink:0;">
+    <button id="copy-btn" onclick="copyFulltext()" style="
+      padding:7px 20px;border-radius:7px;border:1px solid #444;
+      background:transparent;color:#aaa;font-size:13px;
+      font-family:'Noto Sans JP',sans-serif;cursor:pointer;
+    ">コピー</button>
+    <button id="fulltext-close" onclick="closeFulltext()" style="
+      padding:7px 20px;border-radius:7px;border:1px solid #444;
+      background:transparent;color:#999;font-size:13px;
+      font-family:'Noto Sans JP',sans-serif;cursor:pointer;
+    ">閉じる</button>
+  </div>
 </div>
 
 <video id="video-el" autoplay playsinline muted></video>
@@ -605,9 +624,10 @@ function showCalDone(){
 }
 
 async function enterMain(){
+  calRunning = false; // キャリブレーション終了フラグをリセット
   document.getElementById('calibration-screen').style.display='none';
   document.getElementById('main-screen').classList.add('active');
-  updatePips(0, false); // 0を初期表示
+  updatePips(0, false);
   renderZones(); renderOutput();
   let stream=calStream;
   if(!stream){
@@ -758,6 +778,11 @@ function processBlink(lm){
 }
 
 function registerBlink(){
+  // キャリブレーション中はまばたきカウントを無効化
+  if(calRunning) return;
+  // メイン画面が表示されていない場合も無効化
+  if(!document.getElementById('main-screen').classList.contains('active')) return;
+
   if(inputLocked){
     lockOffCount=Math.min(lockOffCount+1,21);
     updatePips(lockOffCount,true);
@@ -938,8 +963,14 @@ function commitCurrent(){
 function resetInputSilent(){
   phase='row'; rowCands=[...ROWS]; colCands=[]; selectedRow=null; renderZones();
 }
-function deleteLast(){ if(outputChars.length){ outputChars.pop(); renderOutput(); } }
-function addChar(ch){ outputChars.push(ch); historyAll+=ch; renderOutput(); }
+function deleteLast(){
+  if(outputChars.length){
+    outputChars.pop();
+    historyAll = outputChars.join(''); // historyAllも同期
+    renderOutput();
+  }
+}
+function addChar(ch){ outputChars.push(ch); historyAll=outputChars.join(''); renderOutput(); }
 
 // ============================================================
 //  RENDER
@@ -964,7 +995,7 @@ function renderZones(){
   const leftStr  = leftChars.join(' ');
   const rightStr = rightChars.length ? rightChars.join(' ') : '—';
 
-  // 色クラス：行=白、段=黄
+  // 色クラス：行=黄色、段=白
   const colorClass = phase==='row' ? 'half-chars row-mode' : 'half-chars col-mode';
 
   // 左右それぞれのspanに書き込む
@@ -1022,10 +1053,31 @@ function toggleCamPreview(){
   document.getElementById('video-el').classList.toggle('show',camPreviewVisible);
 }
 function openFulltext(){
-  document.getElementById('fulltext-body').textContent=historyAll||'（まだ文字が入力されていません）';
+  const text = outputChars.join('') || '（まだ文字が入力されていません）';
+  document.getElementById('fulltext-body').textContent = text;
   document.getElementById('fulltext-panel').classList.add('open');
 }
 function closeFulltext(){ document.getElementById('fulltext-panel').classList.remove('open'); }
+
+async function copyFulltext(){
+  const text = outputChars.join('');
+  if(!text) return;
+  try{
+    await navigator.clipboard.writeText(text);
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'コピー完了 ✓';
+    setTimeout(()=>{ btn.textContent = 'コピー'; },2000);
+  }catch(e){
+    // フォールバック：テキストエリア経由
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'コピー完了 ✓';
+    setTimeout(()=>{ btn.textContent = 'コピー'; },2000);
+  }
+}
 
 // ============================================================
 //  KEYBOARD FALLBACK
